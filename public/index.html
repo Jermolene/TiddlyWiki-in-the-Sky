@@ -1,0 +1,453 @@
+<!doctype html>
+<html>
+<head>
+<title>TiddlyWiki in the Sky with Dropbox</title>
+<script src="//cdnjs.cloudflare.com/ajax/libs/dropbox.js/0.6.1/dropbox.min.js"></script>
+<script>
+
+(function() {
+
+window.twits = {
+	// Original text of the TiddlyWiki file
+	originalText: null,
+	// Dropbox keys
+	isProd: (window.location.protocol + "//" + window.location.host + window.location.pathname) ===
+		"https://dl-web.dropbox.com/spa/4f6lw6nhu5zn5pr/TiddlyWiki/public/index.html",
+	apiKeyProd: "cVvcW2pGaiA=|UCjG9L6A5DMS59+Alw0VAMJV7oJKbJOem/VEthEb9A==",
+	apiKeyDev: "WhjiinZzlwA=|kKYMd52tUbqkOcUJnF+MPHIfyvqfGy9WfQ2ct2wsdg==",
+	// The start of valid TiddlyWiki 2.x.x documents
+	start: '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">\n<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">\n<head>\n<' + 'script id="versionArea" type="text/javascript">\n//<![CDATA[\nvar version = {title: "TiddlyWiki", major: ',
+	// Definitions of the type, start and end of each block of a TiddlyWiki document
+	blocks: [{
+			type: 'html',
+			start: '<' + '/noscript>',
+			end: '<!--POST-STOREAREA-->'
+		},{
+			type: 'script',
+			start: '<' + 'script id="versionArea" type="text/javascript">\n//<![CDATA[',
+			end: '//]]>\n</' + 'script>'
+		},{
+			type: 'style', // Recent TiddlyWikis
+			start: '<' + 'style id="styleArea" type="text/css">',
+			end: '</' + 'style>'
+		},{
+			type: 'style', // Older TiddlyWikis
+			start: '<' + 'style type="text/css">',
+			end: '</' + 'style>'
+		},{
+			type: 'script',
+			start: '<' + 'script id="jsArea" type="text/javascript">\n//<![CDATA[',
+			end: '</' + 'script>'
+		},{
+			type: 'script',
+			start: '<' + 'script id="jsdeprecatedArea" type="text/javascript">',
+			end: '</' + 'script>'
+		},{
+			type: 'script',
+			start: '<' + 'script id="jslibArea" type="text/javascript">',
+			end: '</' + 'script>'
+		},{
+			type: 'script',
+			start: '<' + 'script id="jqueryArea" type="text/javascript">',
+			end: '</' + 'script>'
+		}]
+};
+
+// Main application
+twits.initApp = function() {
+	// Indicate whether we're running in dev
+	if(!twits.isProd) {
+		var dev = document.getElementById("twits-dev");
+		dev.appendChild(document.createTextNode("(dev)"));
+	}
+	// Initialise Dropbox for full access
+	twits.setStatusMessage("Initializing...");
+	var apiKey = twits.isProd ? twits.apiKeyProd : twits.apiKeyDev;
+	twits.client = new Dropbox.Client({
+	    key: apiKey, sandbox: false
+	});
+	// Use the basic redirection authentication driver
+	twits.client.authDriver(new Dropbox.Drivers.Redirect());
+	// Authenticate against Dropbox
+	twits.setStatusMessage("Authenticating with Dropbox...");
+	twits.client.authenticate(function(error, client) {
+		twits.clearStatusMessage();
+		if(error) {
+			return twits.showError(error);  // Something went wrong.
+		}
+		twits.readFolder("/",document.getElementById("twits-files"));
+
+	});
+};
+
+twits.readFolder = function(path,parentNode) {
+	// Loading message
+	var listParent = document.createElement("ol");
+	listParent.appendChild(document.createTextNode("Loading..."));
+	parentNode.appendChild(listParent);
+	// Read the top level directory
+	twits.client.stat(path,{readDir: true},function(error,stat,stats) {
+		if(error) {
+			return twits.showError(error);  // Something went wrong.
+		}
+		// Remove loading message
+		while(listParent.hasChildNodes()) {
+			listParent.removeChild(listParent.firstChild);
+		}
+		// Load entries
+		for(var t=0; t<stats.length; t++) {
+			stat = stats[t];
+			var listItem = document.createElement("li"),
+				classes = [];
+			if(stat.isFolder) {
+				classes.push("twits-folder");
+			} else {
+				classes.push("twits-file");
+				if(stat.mimeType === "text/html") {
+					classes.push("twits-file-html");
+				}
+			}
+			var link;
+			classes.push("twits-file-entry");
+			if(stat.isFolder || (stat.isFile && stat.mimeType === "text/html")) {
+				link = document.createElement("a");
+				link.href = "#";
+				link.setAttribute("data-twits-path",stat.path);
+				link.addEventListener("click",twits.onClickFolderEntry,false);
+			} else {
+				link = document.createElement("span");
+			}
+			link.className = classes.join(" ");
+			var img = document.createElement("img");
+			img.src = "dropbox-icons/16x16/" + stat.typeIcon + ".gif";
+			img.style.width = "16px";
+			img.style.height = "16px";
+			link.appendChild(img);
+			link.appendChild(document.createTextNode(stat.name));
+			if(stat.isFile && stat.humanSize) {
+				var size = document.createElement("span");
+				size.appendChild(document.createTextNode(" (" + stat.humanSize + ")"));
+				link.appendChild(size);
+			}
+			listItem.appendChild(link);
+			listParent.appendChild(listItem);
+		}
+	});
+};
+
+twits.onClickFolderEntry = function(event) {
+	var path = this.getAttribute("data-twits-path"),
+		classes = this.className.split(" ");
+	if(classes.indexOf("twits-folder") !== -1 && classes.indexOf("twits-folder-open") === -1) {
+		classes.push("twits-folder-open");
+		twits.readFolder(path,this.parentNode);
+	}
+	if(classes.indexOf("twits-file-html") !== -1) {
+		twits.openFile(path);
+	}
+	this.className = classes.join(" ");
+	event.preventDefault();
+	return false;
+};
+
+twits.openFile = function(path) {
+	// Read the TiddlyWiki file
+	twits.setStatusMessage("Reading HTML file...");
+	twits.trackProgress(twits.client.readFile(path,function(error,data) {
+		if(error) {
+			return twits.showError(error);  // Something went wrong.
+		}
+		twits.clearStatusMessage();
+		// Check it is a valid TiddlyWiki
+		if(twits.isTiddlyWiki(data)) {
+			// Save the text and path
+			twits.originalPath = path;
+			twits.originalText = data;
+			// Fillet the content out of the TiddlyWiki
+		  	twits.filletTiddlyWiki(data);
+		} else {
+			twits.showError("Not a TiddlyWiki!");
+		}
+	}));
+}
+
+twits.getStatusPanel = function() {
+	var getElement = function(id,parentNode) {
+			parentNode = parentNode || document;
+			var el = document.getElementById(id);
+			if(!el) {
+				el = document.createElement("div");
+				el.setAttribute("id",id);
+				parentNode.appendChild(el);
+			}
+			return el;
+		},
+		status = getElement("twits-status",document.body),
+		message = getElement("twits-message",status),
+		progress = getElement("twits-progress",status);
+	status.style.display = "block";
+	return {status: status, message: message, progress: progress};
+};
+
+twits.clearStatusMessage = function() {
+	var status = twits.getStatusPanel();
+	status.status.style.display = "none";
+}
+
+twits.setStatusMessage = function(text) {
+	var status = twits.getStatusPanel();
+	while(status.message.hasChildNodes()) {
+		status.message.removeChild(status.message.firstChild);
+	}
+	status.message.appendChild(document.createTextNode(text));
+};
+
+twits.setProgress = function(text) {
+	var status = twits.getStatusPanel();
+	while(status.progress.hasChildNodes()) {
+		status.progress.removeChild(status.progress.firstChild);
+	}
+	status.progress.appendChild(document.createTextNode(text));
+};
+
+// Display an error
+twits.showError = function(error) {
+	twits.setStatusMessage("Error: " + error);
+	twits.setProgress("");
+};
+
+twits.trackProgress = function(xhr,isUpload) {
+	var onProgressHandler = function(event) {
+			twits.setProgress(Math.ceil(event.loaded/1024) + "KB");
+		},
+		onLoadHandler = function() {
+		},
+		onErrorHandler = function() {
+			twits.setStatusMessage("XHR error");
+		};
+	var src = isUpload ? xhr.upload : xhr;
+	src.addEventListener("progress",onProgressHandler,false);
+	src.addEventListener("load",onLoadHandler,false);
+	src.addEventListener("error",onErrorHandler,false);
+};
+
+// Determine whether a string is a valid TiddlyWiki 2.x.x document
+twits.isTiddlyWiki = function(text) {
+	return text.indexOf(twits.start) === 0;
+};
+
+// Extract the blocks of a TiddlyWiki 2.x.x document and add them to the current document
+twits.filletTiddlyWiki = function(text) {
+	// Extract a block from a string given start and end markers
+	var extractBlock = function(start,end) {
+		var s = text.indexOf(start);
+		if(s !== -1) {
+			var e = text.indexOf(end,s);
+			if(e !== -1) {
+				return text.substring(s + start.length,e);
+			}
+		}
+		return null;
+	};
+	// Collect up all the blocks in the document
+	var output = {html: [], script: [], style: []};
+	for(var block=0; block<twits.blocks.length; block++) {
+		var blockInfo = twits.blocks[block],
+			blockText = extractBlock(blockInfo.start,blockInfo.end);
+		if(blockText) {
+			output[blockInfo.type].push(blockText);
+		}
+	}
+	// Process the HTML blocks
+	document.body.innerHTML = output.html.join("\n");
+	// Process the style blocks
+	var styleElement = document.createElement("style");
+	styleElement.type = "text/css";
+	styleElement.appendChild(document.createTextNode(output.style.join("\n")));
+	document.getElementsByTagName("head")[0].appendChild(styleElement);
+	// Compose the boot tail script
+	var tail = "twits.patchTiddlyWiki();";
+	// Process the script blocks
+	var scr = document.createElement("script");
+	scr.type = "text/javascript";
+	scr.appendChild(document.createTextNode(output.script.join("\n") + "\n" + tail + "\n"));
+	document.getElementsByTagName("head")[0].appendChild(scr);
+};
+
+twits.patchedSaveChanges = function(onlyIfDirty,tiddlers) {
+	if(onlyIfDirty && !store.isDirty())
+		return;
+	clearMessage();
+	twits.setStatusMessage("Saving changes...");
+	twits.setProgress("");
+	var posDiv = locateStoreArea(twits.originalText);
+	if(!posDiv) {
+		alert(config.messages.invalidFileError.format([localPath]));
+		return;
+	}
+	var revised = updateOriginal(twits.originalText,posDiv);
+	twits.trackProgress(twits.client.writeFile(twits.originalPath, revised, function(error, stat) {
+		if(error) {
+			return twits.showError(error);  // Something went wrong.
+		}
+		twits.clearStatusMessage();
+		displayMessage(config.messages.mainSaved);
+	}),true);
+};
+
+twits.patchTiddlyWiki = function() {
+	window.saveChanges = twits.patchedSaveChanges;
+	// Older TiddlyWikis use loadOptionsCookie()
+	var overrideFn = window.loadOptions ? "loadOptions" : "loadOptionsCookie";
+	var _old_ = window[overrideFn];
+	window[overrideFn] = function() {
+		_old_();
+		config.options.chkHttpReadOnly = false;
+	};
+	main();
+	window[overrideFn] = _old_;
+	story.closeAllTiddlers();
+	story.displayTiddlers(null,store.filterTiddlers(store.getTiddlerText("DefaultTiddlers")));
+};
+
+// Do our stuff when the page has loaded
+document.addEventListener("DOMContentLoaded",function(event) {
+	twits.initApp();
+},false);
+
+})();
+
+</script>
+<style type="text/css">
+
+/* These styles are in the head and so will survive when the parasite TiddlyWiki is loaded */
+
+#twits-status {
+	position: fixed;
+	text-align: center;
+	width: 480px;
+	top: 1em;
+    left: 50%;
+    margin-left: -264px; /* - width/2 - paddingHorz/2 - border */
+	padding: 16px 16px 16px 16px;
+	-webkit-border-radius: 8px;
+	-moz-border-radius: 8px;
+	border-radius: 8px;
+	color: #C09853;
+	text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+	background-color: #FCF8E3;
+	border: 8px solid #FBEED5;
+}
+
+#twits-message {
+
+}
+
+#twits-progress {
+
+}
+
+</style>
+</head>
+<body>
+
+<style type="text/css">
+
+/* These styles are in the body and so will be nuked when the parasite TiddlyWiki is loaded */
+
+body {
+	font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+	margin: 150px 0px;
+	padding: 0px;
+	text-align: center;
+}
+
+#twits-greeting {
+	width: 480px;
+	margin: 0px auto;
+}
+
+.twits-beta {
+	background: red;
+	color: white;
+	font-size: 0.3em;
+	padding: 2px 4px 2px 4px;
+	-webkit-border-radius: 2px;
+	-moz-border-radius: 2px;
+	border-radius: 2px;
+	vertical-align: middle;
+}
+
+#twits-files ol {
+	list-style: none;
+	text-align: left;
+	position: relative;
+	line-height: 1.3em;
+	padding-left: 24px;
+	color: #aaa;
+}
+
+#twits-files li {
+}
+
+#twits-files img {
+	padding-right: 6px;
+}
+
+#twits-files .twits-file-entry {
+	text-decoration: none;
+	padding: 2px 4px 2px 4px;
+	-webkit-border-radius: 4px;
+	-moz-border-radius: 4px;
+	border-radius: 4px;
+}
+
+#twits-files span.twits-file-entry {
+	opacity: 0.7;
+}
+
+#twits-files a.twits-file-html {
+	background: yellow;
+}
+
+#twits-files a span {
+	font-size: 0.8em;
+	color: #aaa;
+}
+
+#twits-files a:hover {
+	background: #56B4FF;
+}
+
+#twits-footer {
+	border-top: 1px solid #bbb;
+	margin-top: 4em;
+	padding-top: 2em;
+	color: #bbb;
+}
+
+</style>
+<div id="twits-greeting">
+<h1>TiddlyWiki in the Sky<br>with Dropbox <span id="twits-dev"></span> <span class="twits-beta">beta</span></h1>
+<p>This app enables you to directly edit TiddlyWiki files stored in your Dropbox. It runs entirely in your browser so your data is never uploaded to tiddlywiki.com.</p>
+<div id="twits-files"></div>
+<div id="twits-footer">
+<p>Built by <a href="http://twitter.com/Jermolene">@Jermolene</a></p>
+</div>
+</div>
+
+<script type="text/javascript">
+
+  var _gaq = _gaq || [];
+  _gaq.push(['_setAccount', 'UA-34591755-1']);
+  _gaq.push(['_trackPageview']);
+
+  (function() {
+    var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+    ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+    var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+  })();
+
+</script>
+</body>
+</html>
