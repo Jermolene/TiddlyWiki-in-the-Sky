@@ -67,7 +67,7 @@ twits.initApp = function() {
 	    key: apiKey, sandbox: false
 	});
 	// Use the basic redirection authentication driver
-	twits.client.authDriver(new Dropbox.Drivers.Redirect());
+	twits.client.authDriver(new Dropbox.Drivers.Redirect({useQuery: false}));
 	// Authenticate against Dropbox
 	twits.setStatusMessage("Authenticating with Dropbox...");
 	twits.client.authenticate(function(error, client) {
@@ -157,7 +157,6 @@ twits.openFile = function(path) {
 		if(error) {
 			return twits.showError(error);  // Something went wrong.
 		}
-		data = twits.manualConvertUTF8ToUnicode(data);
 		twits.clearStatusMessage();
 		// Check it is a valid TiddlyWiki
 		if(twits.isTiddlyWiki(data)) {
@@ -165,7 +164,7 @@ twits.openFile = function(path) {
 			twits.originalPath = path;
 			twits.originalText = data;
 			// Fillet the content out of the TiddlyWiki
-		  	twits.filletTiddlyWiki(data);
+		  	twits.filletTiddlyWiki(twits.manualConvertUTF8ToUnicode(data));
 		} else {
 			twits.showError("Not a TiddlyWiki!");
 		}
@@ -298,6 +297,7 @@ twits.patchedSaveChanges = function(onlyIfDirty,tiddlers) {
 
 twits.patchTiddlyWiki = function() {
 	window.saveChanges = twits.patchedSaveChanges;
+	window.config.tasks.save.action = twits.patchedSaveChanges;
 	// Older TiddlyWikis use loadOptionsCookie()
 	var overrideFn = window.loadOptions ? "loadOptions" : "loadOptionsCookie";
 	var _old_ = window[overrideFn];
