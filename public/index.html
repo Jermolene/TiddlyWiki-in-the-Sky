@@ -157,6 +157,8 @@ twits.openFile = function(path) {
 		if(error) {
 			return twits.showError(error);  // Something went wrong.
 		}
+		// We have to manually decode the file as UTF8, annoyingly
+		data = twits.manualConvertUTF8ToUnicode(data);
 		twits.clearStatusMessage();
 		// Check it is a valid TiddlyWiki
 		if(twits.isTiddlyWiki(data)) {
@@ -164,7 +166,7 @@ twits.openFile = function(path) {
 			twits.originalPath = path;
 			twits.originalText = data;
 			// Fillet the content out of the TiddlyWiki
-		  	twits.filletTiddlyWiki(twits.manualConvertUTF8ToUnicode(data));
+		  	twits.filletTiddlyWiki(data);
 		} else {
 			twits.showError("Not a TiddlyWiki!");
 		}
@@ -285,19 +287,32 @@ twits.patchedSaveChanges = function(onlyIfDirty,tiddlers) {
 		alert(config.messages.invalidFileError.format([localPath]));
 		return;
 	}
-	var revised = updateOriginal(twits.originalText,posDiv);
+	var revised = twits.originalText;
+	// Update the file contents
+	revised = revised.substr(0,posDiv[0] + startSaveArea.length) + "\n" +
+		store.allTiddlersAsHtml() + "\n" +
+		revised.substr(posDiv[1]);
+	var newSiteTitle = getPageTitle().htmlEncode();
+	revised = revised.replaceChunk("<title"+">","</title"+">"," " + newSiteTitle + " ");
+	revised = updateLanguageAttribute(revised);
+	revised = updateMarkupBlock(revised,"PRE-HEAD","MarkupPreHead");
+	revised = updateMarkupBlock(revised,"POST-HEAD","MarkupPostHead");
+	revised = updateMarkupBlock(revised,"PRE-BODY","MarkupPreBody");
+	revised = updateMarkupBlock(revised,"POST-SCRIPT","MarkupPostBody");
+	// Save the file to Dropbox
 	twits.trackProgress(twits.client.writeFile(twits.originalPath, revised, function(error, stat) {
 		if(error) {
 			return twits.showError(error);  // Something went wrong.
 		}
 		twits.clearStatusMessage();
 		displayMessage(config.messages.mainSaved);
+		store.setDirty(false);
 	}),true);
 };
 
 twits.patchTiddlyWiki = function() {
 	window.saveChanges = twits.patchedSaveChanges;
-	window.config.tasks.save.action = twits.patchedSaveChanges;
+	config.tasks.save.action = twits.patchedSaveChanges;
 	// Older TiddlyWikis use loadOptionsCookie()
 	var overrideFn = window.loadOptions ? "loadOptions" : "loadOptionsCookie";
 	var _old_ = window[overrideFn];
