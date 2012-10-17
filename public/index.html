@@ -1,6 +1,7 @@
 <!doctype html>
 <html>
 <head>
+<meta name="utf8beacon" content="éçñøåá—" />
 <title>TiddlyWiki in the Sky with Dropbox</title>
 <script src="//cdnjs.cloudflare.com/ajax/libs/dropbox.js/0.6.1/dropbox.min.js"></script>
 <script>
@@ -288,7 +289,7 @@ twits.patchedSaveChanges = function(onlyIfDirty,tiddlers) {
 		return;
 	}
 	var revised = twits.originalText;
-	// Update the file contents
+	// Update the file
 	revised = revised.substr(0,posDiv[0] + startSaveArea.length) + "\n" +
 		store.allTiddlersAsHtml() + "\n" +
 		revised.substr(posDiv[1]);
