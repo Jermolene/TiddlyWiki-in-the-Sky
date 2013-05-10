@@ -3,7 +3,7 @@
 <head>
 <meta name="utf8beacon" content="éçñøåá—" />
 <title>TiddlyWiki in the Sky with Dropbox</title>
-<script src="//cdnjs.cloudflare.com/ajax/libs/dropbox.js/0.6.3/dropbox.min.js"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/dropbox.js/0.9.2/dropbox.min.js"></script>
 <script>
 
 (function() {
@@ -153,13 +153,15 @@ twits.onClickFolderEntry = function(event) {
 
 twits.openFile = function(path) {
 	// Read the TiddlyWiki file
+	// We can't trust Dropbox to have detected that the file is UTF8, so we load it in binary and manually decode it
 	twits.setStatusMessage("Reading HTML file...");
-	twits.trackProgress(twits.client.readFile(path,function(error,data) {
+	twits.trackProgress(twits.client.readFile(path,{arrayBuffer: true},function(error,data) {
 		if(error) {
 			return twits.showError(error);  // Something went wrong.
 		}
 		// We have to manually decode the file as UTF8, annoyingly
-		data = twits.manualConvertUTF8ToUnicode(data);
+		var byteData = new Uint8Array(data);
+		data = twits.manualConvertUTF8ToUnicode(byteData);
 		twits.clearStatusMessage();
 		// Check it is a valid TiddlyWiki
 		if(twits.isTiddlyWiki(data)) {
@@ -328,27 +330,26 @@ twits.patchTiddlyWiki = function() {
 };
 
 twits.manualConvertUTF8ToUnicode = function(utf) {
-	var uni = utf;
-	var src = 0;
-	var dst = 0;
-	var b1, b2, b3;
-	var c;
+	var uni = [],
+		src = 0,
+		b1, b2, b3,
+		c;
 	while(src < utf.length) {
-		b1 = utf.charCodeAt(src++);
+		b1 = utf[src++];
 		if(b1 < 0x80) {
-			dst++;
+			uni.push(String.fromCharCode(b1));
 		} else if(b1 < 0xE0) {
-			b2 = utf.charCodeAt(src++);
+			b2 = utf[src++];
 			c = String.fromCharCode(((b1 & 0x1F) << 6) | (b2 & 0x3F));
-			uni = uni.substring(0,dst++).concat(c,utf.substr(src));
+			uni.push(c);
 		} else {
-			b2 = utf.charCodeAt(src++);
-			b3 = utf.charCodeAt(src++);
+			b2 = utf[src++];
+			b3 = utf[src++];
 			c = String.fromCharCode(((b1 & 0xF) << 12) | ((b2 & 0x3F) << 6) | (b3 & 0x3F));
-			uni = uni.substring(0,dst++).concat(c,utf.substr(src));
+			uni.push(c);
 		}
 	}
-	return uni;
+	return uni.join("");
 };
 
 // Do our stuff when the page has loaded
@@ -471,6 +472,7 @@ body {
 <div id="twits-greeting">
 <h1>TiddlyWiki in the Sky<br>with Dropbox <span id="twits-dev"></span> <span class="twits-beta">beta</span></h1>
 <p>This app enables you to directly edit TiddlyWiki files stored in your Dropbox. It runs entirely in your browser so your data is never uploaded to tiddlywiki.com.</p>
+<p>If you are having trouble with accented characters in your TiddlyWiki files please see <a href="https://groups.google.com/d/topic/tiddlywiki/dXuJsnD8Irw/discussion" target="_blank">this discussion</a></p>
 <div id="twits-files"></div>
 <div id="twits-footer">
 <p>Built by <a href="http://twitter.com/Jermolene">@Jermolene</a></p>
