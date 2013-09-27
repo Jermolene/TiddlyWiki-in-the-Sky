@@ -3,7 +3,7 @@
 <head>
 <meta name="utf8beacon" content="éçñøåá—" />
 <title>TiddlyWiki in the Sky with Dropbox</title>
-<script src="//cdnjs.cloudflare.com/ajax/libs/dropbox.js/0.9.2/dropbox.min.js"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/dropbox.js/0.10.1/dropbox.min.js"></script>
 <script>
 
 (function() {
@@ -13,9 +13,9 @@ window.twits = {
 	originalText: null,
 	// Dropbox keys
 	isProd: (window.location.protocol + "//" + window.location.host + window.location.pathname) ===
-		"https://dl-web.dropbox.com/spa/4f6lw6nhu5zn5pr/TiddlyWiki/public/index.html",
-	apiKeyProd: "cVvcW2pGaiA=|UCjG9L6A5DMS59+Alw0VAMJV7oJKbJOem/VEthEb9A==",
-	apiKeyDev: "WhjiinZzlwA=|kKYMd52tUbqkOcUJnF+MPHIfyvqfGy9WfQ2ct2wsdg==",
+		"https://dl.dropboxusercontent.com/spa/4f6lw6nhu5zn5pr/TiddlyWiki/public/index.html",
+	apiKeyProd: "waukml5k6zt6vzr",
+	apiKeyDev: "5zahnrxzw6wsy70",
 	// The start of valid TiddlyWiki 2.x.x documents
 	start: '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">\n<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">\n<head>\n<' + 'script id="versionArea" type="text/javascript">\n//<![CDATA[\nvar version = {title: "TiddlyWiki", major: ',
 	// Definitions of the type, start and end of each block of a TiddlyWiki document
@@ -67,8 +67,11 @@ twits.initApp = function() {
 	twits.client = new Dropbox.Client({
 	    key: apiKey, sandbox: false
 	});
-	// Use the basic redirection authentication driver
-	twits.client.authDriver(new Dropbox.Drivers.Redirect({useQuery: false}));
+
+	// Apparently not needed any more (since Dropbox.js 10.x)
+	// // Use the basic redirection authentication driver
+	// twits.client.authDriver(new Dropbox.Drivers.Redirect({useQuery: false}));
+
 	// Authenticate against Dropbox
 	twits.setStatusMessage("Authenticating with Dropbox...");
 	twits.client.authenticate(function(error, client) {
